@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Inventory Dashboard · TechNest Computers</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><path fill="currentColor" d="M3 7.5 12 3l9 4.5v9L12 21l-9-4.5v-9Zm9-2.3L6 8.2l6 3 6-3-6-3Zm-7 4.4v6.1l6 3v-6.1l-6-3Zm8 9.1 6-3V9.6l-6 3v6.1Z"/></svg>
+    <div><h1>Inventory Dashboard</h1><span class="sub">TechNest Computers · Tel Aviv · Jerusalem · Ariel</span></div>
+  </div>
+  <div class="top-actions">
+    <div class="asof" id="asof" aria-live="polite">Loading…</div>
+    <button class="btn" id="btnValidation" title="Data validation status"><span id="valBadge">Checking data…</span></button>
+    <button class="btn primary" id="btnRefresh">↻ Refresh data</button>
+    <button class="bell" id="btnBell" aria-label="Open insights" aria-expanded="false">
+      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M12 22a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 22Zm7-6V11a7 7 0 0 0-5-6.7V3a2 2 0 0 0-4 0v1.3A7 7 0 0 0 5 11v5l-2 2v1h18v-1l-2-2Z"/></svg>
+      <span class="bell-count" id="bellCount" hidden>0</span>
+    </button>
+  </div>
+</header>
+
+<div id="errorBox" class="errorbox" hidden></div>
+
+<main id="app" class="app" hidden>
+  <section class="filters card" aria-label="Filters">
+    <label>Branch
+      <select id="fBranch"></select>
+    </label>
+    <label>Category
+      <select id="fCategory"></select>
+    </label>
+    <label>Brand
+      <select id="fBrand"></select>
+    </label>
+    <label>Stock status
+      <select id="fStatus">
+        <option value="ALL">All products</option>
+        <option value="OUT">Out of stock</option>
+        <option value="LOW">Running low</option>
+        <option value="ATTN">Out or running low</option>
+        <option value="OK">Healthy stock</option>
+        <option value="DISC">Discontinued</option>
+      </select>
+    </label>
+    <label class="grow">Search product or SKU
+      <input id="fSearch" type="search" placeholder="e.g. HP Pavilion or LAP-HP-001">
+    </label>
+    <button class="btn" id="btnClear">Clear filters</button>
+  </section>
+
+  <section class="kpis" id="kpis" aria-label="Key numbers"></section>
+
+  <section class="branches" id="branchCards" aria-label="Branches"></section>
+
+  <section class="grid2">
+    <div class="card"><h2>Where the available stock is <span class="hint">by branch</span></h2><div class="chartbox"><canvas id="chBranch"></canvas></div></div>
+    <div class="card"><h2>Available units by category <span class="hint">split by branch</span></h2><div class="chartbox"><canvas id="chCategory"></canvas></div></div>
+  </section>
+
+  <section class="card">
+    <div class="cardhead">
+      <h2>Stock by <span id="groupTitle">brand &amp; category</span> <span class="hint">on shelves − ordered by customers = available</span></h2>
+      <div class="seg" role="group" aria-label="Group by">
+        <button data-group="brandCat" class="on">Brand + category</button>
+        <button data-group="category">Category</button>
+        <button data-group="brand">Brand</button>
+      </div>
+    </div>
+    <div class="tablewrap"><table id="tblGroups"></table></div>
+  </section>
+
+  <section class="card">
+    <div class="cardhead">
+      <h2>All products <span class="hint" id="prodCount"></span></h2>
+      <button class="btn" id="btnCsv">Download CSV</button>
+    </div>
+    <div class="tablewrap tall"><table id="tblProducts"></table></div>
+  </section>
+
+  <section class="card">
+    <div class="cardhead"><h2>Deliveries on the way <span class="hint">open purchase orders from suppliers</span></h2></div>
+    <div class="tablewrap"><table id="tblPO"></table></div>
+  </section>
+
+  <footer class="foot" id="foot"></footer>
+</main>
+
+<!-- Insights panel -->
+<aside class="panel" id="insightPanel" aria-label="Insights" hidden>
+  <div class="panelhead">
+    <h2>Insights</h2>
+    <button class="x" data-close="insightPanel" aria-label="Close">×</button>
+  </div>
+  <div class="chips" id="insightChips"></div>
+  <div class="panelbody" id="insightList"></div>
+</aside>
+
+<!-- Validation panel -->
+<aside class="panel narrow" id="valPanel" aria-label="Data validation" hidden>
+  <div class="panelhead"><h2>Data checks</h2><button class="x" data-close="valPanel" aria-label="Close">×</button></div>
+  <div class="panelbody" id="valList"></div>
+</aside>
+
+<!-- Product drawer -->
+<aside class="panel wide" id="drawer" aria-label="Product details" hidden>
+  <div class="panelhead"><h2 id="drawerTitle">Product</h2><button class="x" data-close="drawer" aria-label="Close">×</button></div>
+  <div class="panelbody" id="drawerBody"></div>
+</aside>
+<div class="scrim" id="scrim" hidden></div>
+
+<script src="lib/xlsx.full.min.js"></script>
+<script src="lib/chart.umd.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

@@ -4,9 +4,9 @@ Rules for anyone (or any AI assistant) working on this project. If something her
 
 ## 1. Project at a glance
 
-- **What:** Inventory dashboard for TechNest Computers, a small store selling computers, tablets and PC-related electronics and software.
+- **What:** Inventory-only dashboard for TechNest Computers, a small store (branches: Tel Aviv, Jerusalem, Ariel) selling computers, tablets and PC-related electronics and software. It shows no revenue or prices.
 - **Users:** store owner, business owner, inventory manager.
-- **Key docs:** `SPEC.md` (design), `ER.md` (data model), `data/` (Excel sources).
+- **Key docs:** `SPEC.md` (design), `ER.md` (data model), `data/` (Excel sources), `index.html` + `app.js` (dashboard). Run with `npx serve .`.
 
 ## 2. Language
 
@@ -39,7 +39,7 @@ Rules for anyone (or any AI assistant) working on this project. If something her
 - The Excel files in `data/` are the **single source of truth**. The dashboard never stores or hard-codes figures.
 - Do not rename sheets or columns without updating `ER.md`, `SPEC.md` and the dashboard code together.
 - Column names are `snake_case`; IDs are text with a prefix (`P001`, `C001`, `S01`, `ORD-0001`, `PO-0001`).
-- After any change to the data, re-check the 11 validation rules in `SPEC.md` section 8. Never "fix" a mismatch by editing a total; fix the underlying rows or movements.
+- After any change to the data, re-check the 9 validation rules in `SPEC.md` section 9. Never "fix" a mismatch by editing a total; fix the underlying rows or movements.
 - Sample data is fictional. Do not put real customer information in the repository.
 
 ## 5. Code practices
@@ -66,12 +66,12 @@ Rules for anyone (or any AI assistant) working on this project. If something her
 
 - [ ] Dashboard loads with no console errors.
 - [ ] Refresh re-reads the files (edit a quantity in Excel, refresh, see the change).
-- [ ] All 11 validation checks pass on the sample data.
-- [ ] KPI numbers match a manual check (e.g. total on hand = 698 on the sample data).
+- [ ] All 9 validation checks pass on the sample data (badge in the header says ✔).
+- [ ] KPI numbers match a manual check (e.g. total on the shelves = 943 and really available = 908 on the sample data).
 - [ ] Filters work and the "no results" state looks right.
 - [ ] Palette, English text and layout match this file.
 
 ## 9. Communication
 
-- Ask the owner when a business rule is unclear (see `SPEC.md` section 11) instead of guessing.
+- Ask the owner when a business rule is unclear (see `SPEC.md` section 12) instead of guessing.
 - Record decisions by updating `SPEC.md`, not in chat only.

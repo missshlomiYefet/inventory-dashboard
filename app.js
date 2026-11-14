@@ -40,7 +40,67 @@ async function readBook(file) {
   const wb = XLSX.read(await r.arrayBuffer(), { type: 'array' });
   return { wb, modified: r.headers.get('last-modified') };
 }
+/* ---------- Airtable source ----------
+   Each dashboard sheet maps to an Airtable table. A field is either a column name, or { link, to } for a linked-record
+   field, which Airtable returns as record ids; those are translated back to the linked table's ID text (e.g. "P001"). */
+const AT = {
+  Branches:        { table:'Branches',        key:'Branch ID',   fields:{ branch_id:'Branch ID', branch_name:'Branch Name', city:'City' } },
+  Suppliers:       { table:'Suppliers',       key:'Supplier ID', fields:{ supplier_id:'Supplier ID', supplier_name:'Supplier Name' } },
+  Products:        { table:'Products',        key:'Product ID',  fields:{ product_id:'Product ID', sku:'SKU', product_name:'Product Name', brand:'Brand', category:'Category', reorder_level:'Reorder Level', reorder_quantity:'Reorder Quantity', supplier_id:{ link:'Supplier', to:'Suppliers' }, status:'Status' } },
+  Orders:          { table:'Orders',          key:'Order ID',    fields:{ order_id:'Order ID', branch_id:{ link:'Branch', to:'Branches' }, order_date:'Order Date', status:'Status' } },
+  Order_Items:     { table:'Order_Items',     fields:{ order_item_id:'order_item_id', order_id:'order_id', product_id:'product_id', quantity:'quantity', line_total:'line_total' } },
+  Purchase_Orders: { table:'Purchase Orders', key:'PO ID',       fields:{ po_id:'PO ID', supplier_id:{ link:'Supplier', to:'Suppliers' }, branch_id:{ link:'Branch', to:'Branches' }, order_date:'Order Date', expected_date:'Expected Date', received_date:'Received Date', status:'Status' } },
+  PO_Items:        { table:'PO_Items',        fields:{ po_item_id:'po_item_id', po_id:'po_id', product_id:'product_id', quantity_ordered:'quantity_ordered', quantity_received:'quantity_received' } },
+  Inventory:       { table:'Inventory',       key:'Inventory ID', fields:{ inventory_id:'Inventory ID', product_id:{ link:'Product', to:'Products' }, branch_id:{ link:'Branch', to:'Branches' }, quantity_on_hand:'Quantity On Hand', quantity_reserved:'Quantity Reserved', quantity_available:'Quantity Available', quantity_on_order:'Quantity On Order', min_stock_level:'Min Stock Level', storage_location:'Storage Location', last_stock_count_date:'Last Stock Count Date', last_updated:'Last Updated' } },
+  Stock_Movements: { table:'Stock_Movements', fields:{ movement_id:'movement_id', movement_date:'movement_date', product_id:'product_id', branch_id:'branch_id', movement_type:'movement_type', quantity:'quantity' } },
+};
+const useAirtable = () => !!(window.AIRTABLE && window.AIRTABLE.token && !window.AIRTABLE.token.startsWith('PASTE'));
+let lastRequestAt = 0;
+async function atFetch(url) {            // Airtable allows 5 requests/second per base: space requests out and retry on 429
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const wait = lastRequestAt + 230 - Date.now();
+    lastRequestAt = Math.max(Date.now(), lastRequestAt + 230);
+    if (wait > 0) await new Promise(r => setTimeout(r, wait));
+    const r = await fetch(url, { headers: { Authorization: 'Bearer ' + window.AIRTABLE.token }, cache: 'no-store' });
+    if (r.status === 429) { await new Promise(r => setTimeout(r, 1500)); continue; }
+    if (!r.ok) throw new Error(`Airtable error ${r.status}: ${(await r.text()).slice(0, 200)}`);
+    return r.json();
+  }
+  throw new Error('Airtable is rate-limiting requests. Wait a few seconds and refresh.');
+}
+async function atTable(def) {            // all records of one table (100 per page)
+  const records = [];
+  let offset = '';
+  do {
+    const fl = Object.values(def.fields).map(f => typeof f === 'string' ? f : f.link);
+    const qs = fl.map(f => 'fields%5B%5D=' + encodeURIComponent(f)).join('&') + (offset ? '&offset=' + offset : '');
+    const j = await atFetch(`https://api.airtable.com/v0/${window.AIRTABLE.baseId}/${encodeURIComponent(def.table)}?pageSize=100&${qs}`);
+    records.push(...j.records);
+    offset = j.offset || '';
+  } while (offset);
+  return records;
+}
+async function loadAirtable() {
+  const sheets = Object.keys(AT);
+  const raw = Object.fromEntries(await Promise.all(sheets.map(async s => [s, await atTable(AT[s])])));
+  const idText = {};                     // record id -> its ID text, for each table that others link to
+  for (const s of sheets) if (AT[s].key) for (const rec of raw[s]) idText[rec.id] = rec.fields[AT[s].key];
+  const db = {}, mod = {}, now = new Date().toISOString();
+  for (const s of sheets) {
+    db[s] = raw[s].map(rec => {
+      const row = {};
+      for (const [col, f] of Object.entries(AT[s].fields)) {
+        if (typeof f === 'string') row[col] = rec.fields[f] ?? null;
+        else { const ids = rec.fields[f.link] || []; row[col] = ids.length ? (idText[ids[0]] ?? null) : null; }
+      }
+      return row;
+    }).filter(row => Object.values(row).some(v => v !== null));   // ignore completely empty rows
+    mod['Airtable › ' + AT[s].table] = now;
+  }
+  return { db, mod };
+}
 async function loadAll() {
+  if (useAirtable()) return loadAirtable();
   const db = {}, mod = {};
   const names = Object.keys(SCHEMA);
   const books = await Promise.all(names.map(readBook));
@@ -229,7 +289,9 @@ function buildInsights() {
 
   // Overdue stock counts
   M.branches.forEach(b => {
-    const d = M.rows.find(r => r.branch_id === b.branch_id).last_stock_count_date, age = dayDiff(asOf, d);
+    const first = M.rows.find(r => r.branch_id === b.branch_id);
+    if (!first) { push('info', `${b.branch_name} has no stock lines yet`, `Add rows to the Inventory table for this branch (one per product) so it shows up in the dashboard.`, null); return; }
+    const d = first.last_stock_count_date, age = dayDiff(asOf, d);
     if (age > STOCK_COUNT_MAX_DAYS) push('warning', `${b.branch_name} stock count is overdue`, `Last count was ${fmtD(d)} (${age} days ago). Counts should be at most ${STOCK_COUNT_MAX_DAYS} days apart.`, null);
   });
 

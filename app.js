@@ -99,8 +99,26 @@ async function loadAirtable() {
   }
   return { db, mod };
 }
+/* Snapshot of the Airtable data, written to data/airtable.json by the GitHub Actions workflow (scripts/fetch-airtable.js).
+   Used on GitHub Pages, where there is no token and the browser cannot call Airtable itself. */
+async function loadSnapshot() {
+  try {
+    const r = await fetch(`data/airtable.json?_=${Date.now()}`, { cache: 'no-store' });
+    if (!r.ok) return null;
+    const j = await r.json();
+    if (!j || !j.db) return null;
+    const mod = {};
+    Object.values(AT).forEach(d => { mod['Airtable › ' + d.table] = j.fetchedAt; });
+    return { db: j.db, mod, fetchedAt: j.fetchedAt };
+  } catch (e) { return null; }
+}
+let dataSource = 'excel';      // 'live' = Airtable API, 'snapshot' = data/airtable.json from the workflow, 'excel' = Excel files
+let snapshotTime = null;
 async function loadAll() {
-  if (useAirtable()) return loadAirtable();
+  if (useAirtable()) { dataSource = 'live'; return loadAirtable(); }          // your computer: token in airtable-config.js
+  const snap = await loadSnapshot();                                          // GitHub Pages: JSON made by the workflow
+  if (snap) { dataSource = 'snapshot'; snapshotTime = snap.fetchedAt; return snap; }
+  dataSource = 'excel';
   const db = {}, mod = {};
   const names = Object.keys(SCHEMA);
   const books = await Promise.all(names.map(readBook));
@@ -435,7 +453,7 @@ function renderValidation() {
   $('#valBadge').innerHTML = bad ? `<span class="fail">✖ ${bad} data issue${bad > 1 ? 's' : ''}</span>` : '<span class="pass">✔ Data checks passed</span>';
   $('#valList').innerHTML = `<p class="kv">Run automatically every time the data loads. ${M.checks.length - bad} of ${M.checks.length} passed.</p>` +
     M.checks.map(c => `<div class="chk"><span class="mk ${c.ok ? 'pass' : 'fail'}">${c.ok ? '✔' : '✖'}</span><div><b>${esc(c.name)}</b><div class="kv">${esc(c.detail)}</div></div></div>`).join('') +
-    `<h3>Files read</h3>` + Object.keys(M.mod).map(f => `<div class="kv">${esc(f)} — saved ${M.mod[f] ? esc(new Date(M.mod[f]).toLocaleString('en-GB')) : 'unknown'}</div>`).join('');
+    `<h3>${{ live: 'Tables read from Airtable', snapshot: 'Tables in the Airtable snapshot', excel: 'Files read' }[dataSource]}</h3>` + Object.keys(M.mod).map(f => `<div class="kv">${esc(f)} — ${dataSource === 'excel' ? 'saved' : 'fetched'} ${M.mod[f] ? esc(new Date(M.mod[f]).toLocaleString('en-GB')) : 'unknown'}</div>`).join('');
 }
 function openDrawer(pid) {
   const p = M.prodById[pid]; if (!p) return;
@@ -484,9 +502,14 @@ async function refresh() {
     M.checks = validate(M);
     M.insights = buildInsights();
     $('#errorBox').hidden = true; $('#app').hidden = false;
-    $('#asof').innerHTML = `Stock as of <b>${fmtD(M.asOf)}</b><br>Loaded ${new Date().toLocaleTimeString('en-GB')}`;
+    const snapAt = snapshotTime ? new Date(snapshotTime).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
+    const src = { live: 'Source: <b>Airtable</b> (live)', snapshot: `Source: <b>Airtable</b> snapshot of ${snapAt}`, excel: 'Source: Excel files (offline)' }[dataSource];
+    $('#asof').innerHTML = `Stock as of <b>${fmtD(M.asOf)}</b><br>${src} · loaded ${new Date().toLocaleTimeString('en-GB')}`;
     renderValidation(); renderInsights(); renderAll();
-    $('#foot').textContent = `${M.db.Products.length} products · ${M.branches.length} branches · ${M.db.Inventory.length} stock lines · ${M.db.Stock_Movements.length} stock movements. Data is re-read from the Excel files on every refresh.`;
+    $('#foot').textContent = `${M.db.Products.length} products · ${M.branches.length} branches · ${M.db.Inventory.length} stock lines · ${M.db.Stock_Movements.length} stock movements. ` +
+      { live: 'Data is fetched from the Airtable API (api.airtable.com) on every load and refresh.',
+        snapshot: 'Data comes from Airtable via a GitHub Actions job that refreshes data/airtable.json about every 15 minutes.',
+        excel: 'Data is re-read from the Excel files on every refresh.' }[dataSource];
   } catch (e) {
     console.error(e);
     $('#app').hidden = true; $('#errorBox').hidden = false;

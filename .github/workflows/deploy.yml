@@ -2,7 +2,7 @@ name: Fetch Airtable data and deploy
 
 on:
   schedule:
-    - cron: '*/1 * * * *'   # every 1 minutes
+    - cron: '0 * * * *'      # every hour, on the hour (UTC)
   workflow_dispatch:          # lets you run it by hand from the Actions tab
   push:
     branches: [main]          # also runs when you push code
